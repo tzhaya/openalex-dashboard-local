@@ -102,15 +102,10 @@ HTMLファイルをダブルクリックするか、ブラウザにドラッグ&
 
 ## 📋 OpenAlex IDの調べ方
 
-### 方法1: OpenAlex Webサイト
-1. https://openalex.org にアクセス
-2. 機関名を検索
-3. URLの末尾のIDをコピー（例: `I4210089209`）
-
-### 方法2: API検索
-```bash
-curl "https://api.openalex.org/institutions?search=機関名"
-```
+1. https://openalex.org/institutions にアクセスして機関名を検索
+2. ヒットした機関をクリック
+3. リンクのアイコン 🔗をクリック
+4. 表示されたURL（例 `https://openalex.org/institutions/i4210089209`）の末尾のIDをコピー（例: `I4210089209`）
 
 ## 📂 ファイル構成
 
