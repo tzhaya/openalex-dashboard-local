@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>研究論文ダッシュボード</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha256-DiMmxoaAcr7BWSdgxnKQQ8ruopYKK0bO5qIZKqxqv/A=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js" integrity="sha256-9T+DPdub+X7+hWuwY31P6I8545mZx+lKS4r8jeihouU=" crossorigin="anonymous"></script>
+    <link href="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/styles/vis-network.min.css" rel="stylesheet" type="text/css" integrity="sha256-oHT49MdIt8yzdaKuWNLeGIGyWibQ5Bmp51Dn2GCtGOI=" crossorigin="anonymous" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f3f4f6;
+            color: #111827;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header .meta {
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 4rem 0;
+        }
+        
+        .spinner {
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            color: #991b1b;
+        }
+        
+        .filters {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .filters h2 {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .filter-item label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #374151;
+        }
+        
+        .filter-item input,
+        .filter-item select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+        }
+        
+        .filter-item button {
+            width: 100%;
+            padding: 0.5rem 1rem;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 1.75rem;
+        }
+        
+        .filter-item button:hover {
+            background-color: #1d4ed8;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card.blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; }
+        .stat-card.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+        .stat-card.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; }
+        .stat-card.orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; }
+        
+        .stat-card .label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .stat-card .sub {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+        
+        .stat-card .icon {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 3rem;
+            opacity: 0.3;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .chart-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .chart-card h2 {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .papers-list {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .papers-list h2 {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        .paper-item {
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: #f9fafb;
+            border-radius: 0 0.375rem 0.375rem 0;
+        }
+        
+        .paper-item:hover {
+            background-color: #f3f4f6;
+        }
+        
+        .paper-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #111827;
+        }
+        
+        .paper-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            font-size: 0.875rem;
+        }
+        
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge.blue {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .badge.green {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .badge.purple {
+            background-color: #e9d5ff;
+            color: #6b21a8;
+        }
+        
+        .author-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .author-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+        }
+        
+        .author-item:hover {
+            background-color: #f3f4f6;
+        }
+        
+        .author-rank {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            margin-right: 0.75rem;
+        }
+        
+        .footer {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-top: 2rem;
+            padding: 1.5rem 0;
+        }
+        
+        .papers-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        .papers-table th {
+            background-color: #f3f4f6;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .papers-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.875rem;
+        }
+        
+        .papers-table tr:hover {
+            background-color: #f9fafb;
+        }
+        
+        .oa-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .oa-gold {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .oa-green {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .oa-hybrid {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .oa-bronze {
+            background-color: #fed7aa;
+            color: #9a3412;
+        }
+        
+        .oa-closed {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding: 1rem 0;
+        }
+        
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            background-color: white;
+            color: #374151;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background-color: #f3f4f6;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination button.active {
+            background-color: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+        
+        .pagination .page-info {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.6);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 1000px;
+            border-radius: 0.5rem;
+            position: relative;
+        }
+
+        .modal-header {
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-header h2 {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+        }
+
+        #citationNetwork {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #e5e7eb;
+            margin-top: 1rem;
+        }
+        
+        .citation-lists {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .citation-list {
+            flex: 1;
+        }
+        .citation-list h3 {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+        .citation-list ul {
+            list-style-type: none;
+        }
+        .citation-list li {
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .citation-list a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        .citation-list a:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .stat-card .value {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="institutionName">読み込み中...</h1>
+            <p id="institutionNameEn"></p>
+            <p class="meta" id="institutionMeta"></p>
+        </div>
+
+        <div id="error-container"></div>
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>OpenAlex APIからデータを取得中...</p>
+            <p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.5rem;">研究論文を分析しています</p>
+        </div>
+
+        <div id="content" style="display: none;">
+            <div class="filters">
+                <h2>🔍 フィルター設定</h2>
+                <div class="filter-grid">
+                    <div class="filter-item">
+                        <label for="yearStart">開始年</label>
+                        <input type="number" id="yearStart" min="2000" max="2099">
+                    </div>
+                    <div class="filter-item">
+                        <label for="yearEnd">終了年</label>
+                        <input type="number" id="yearEnd" min="2000" max="2099">
+                    </div>
+                    <div class="filter-item">
+                        <label for="oaStatus">オープンアクセス状況</label>
+                        <select id="oaStatus">
+                            <option value="all">すべて</option>
+                            <option value="gold">Gold OA</option>
+                            <option value="green">Green OA</option>
+                            <option value="hybrid">Hybrid OA</option>
+                            <option value="bronze">Bronze OA</option>
+                            <option value="closed">Closed</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label for="typeFilter">種別</label>
+                        <select id="typeFilter">
+                            <option value="all">すべて</option>
+                            <option value="article">article</option>
+                            <option value="preprint">preprint</option>
+                            <option value="review">review</option>
+                            <option value="book">book</option>
+                            <option value="book-chapter">book-chapter</option>
+                            <option value="dataset">dataset</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <button onclick="loadData()">🔄 更新</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card blue">
+                    <div class="label">総論文数</div>
+                    <div class="value" id="totalWorks">0</div>
+                    <div class="icon">📄</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="label">OA論文数</div>
+                    <div class="value" id="oaCount">0</div>
+                    <div class="sub" id="oaPercentage">0%</div>
+                    <div class="icon">🔓</div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="label">平均被引用数</div>
+                    <div class="value" id="avgCitations">0</div>
+                    <div class="icon">📊</div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="label">共同研究国数</div>
+                    <div class="value" id="countryCount">0</div>
+                    <div class="icon">🌍</div>
+                </div>
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h2>📈 年次論文数推移</h2>
+                    <div class="chart-container">
+                        <canvas id="yearlyChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h2>🔓 オープンアクセス状況</h2>
+                    <div class="chart-container">
+                        <canvas id="oaChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card full-width">
+                <h2>🔬 研究トピック TOP 10</h2>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="topicsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="charts-grid" style="margin-top: 1.5rem;">
+                <div class="chart-card">
+                    <h2>🌏 国際共同研究 - 国別分布</h2>
+                    <div class="chart-container" style="height: 400px;">
+                        <canvas id="countryChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h2>👥 主要共著者 TOP 10</h2>
+                    <div class="author-list" id="authorsList"></div>
+                </div>
+            </div>
+
+            <div class="chart-card full-width" style="margin-top: 1.5rem;">
+                <h2>🏢 共同研究機関 TOP 15</h2>
+                <div class="chart-container" style="height: 450px;">
+                    <canvas id="institutionsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="papers-list" style="margin-top: 1.5rem;">
+                <h2>⭐ 高被引用論文 TOP 5</h2>
+                <div id="papersList"></div>
+            </div>
+
+            <!-- 論文一覧 -->
+            <div class="papers-list" style="margin-top: 1.5rem;">
+                <h2>📄 論文一覧</h2>
+                <div style="overflow-x: auto;">
+                    <table class="papers-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 24%;">タイトル</th>
+                                <th style="width: 6%;">発行年</th>
+                                <th style="width: 8%;">種別</th>
+                                <th style="width: 8%;">OA状況</th>
+                                <th style="width: 6%;">被引用数</th>
+                                <th style="width: 6%;">引用数</th>
+                                <th style="width: 14%;">刊行物名</th>
+                                <th style="width: 13%;">DOI</th>
+                                <th style="width: 10%;">研究トピック</th>
+                                <th style="width: 5%;">引用</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allPapersList"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>データソース:</strong> OpenAlex API (https://openalex.org)</p>
+            <p id="footerIds"></p>
+            <p id="lastUpdate">最終更新: </p>
+        </div>
+    </div>
+
+    <!-- Citation Network Modal -->
+    <div id="citationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="citationModalTitle">引用ネットワーク</h2>
+                <span class="close-button" id="modalCloseButton">&times;</span>
+            </div>
+            <div id="citationNetwork">
+                <div class="spinner"></div>
+                <p style="text-align: center;">引用情報を取得中...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // 【カスタマイズ設定】ここを変更してください
+        // ========================================
+        
+        const CONFIG = {
+            // 1. OpenAlex APIキー（必須）
+            // https://openalex.org/settings/api からご自身のキーを取得して貼り付けてください
+            API_KEY: "YOUR_API_KEY",
+
+            // 2. 機関のOpenAlex ID（必須）
+            // 例: "I4210089209" (JIRCASの場合)
+            // 調べ方: https://openalex.org で機関名を検索し、URLの末尾にあるID (iで始まる9桁の数字) をコピーしてください
+            OPENALEX_ID: "YOUR_INSTITUTION_OPENALEX_ID",
+            
+            // 3. ROR ID（オプション - 表示用）
+            // 例: "005pdtr14" (JIRCASの場合)
+            // 調べ方: https://ror.org で機関名を検索し、IDをコピーしてください
+            ROR_ID: "YOUR_INSTITUTION_ROR_ID",
+            
+            // 4. 機関名（オプション - APIから自動取得できなかった場合の表示名）
+            INSTITUTION_NAME_JA: "あなたの機関名",
+            INSTITUTION_NAME_EN: "Your Institution Name",
+
+            // 5. 初期表示期間（オプション）
+            YEAR_START: 2021,
+            YEAR_END: 2026
+        };
+        
+        // ========================================
+        // 以下は変更不要（内部処理）
+        // ========================================
+        
+        let charts = {};
+        let institutionInfo = null;
+        let allPapersData = [];
+        let currentPage = 1;
+        const papersPerPage = 10;
+        let citationNetwork = null;
+
+        // CONFIGの初期表示期間をフィルターに反映
+        document.getElementById('yearStart').value = CONFIG.YEAR_START;
+        document.getElementById('yearEnd').value = CONFIG.YEAR_END;
+
+        // XSS対策: HTMLエスケープ関数
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        async function fetchOpenAlexData(endpoint, params = {}) {
+            const baseUrl = "https://api.openalex.org";
+            const queryParams = new URLSearchParams({
+                ...(CONFIG.API_KEY && { api_key: CONFIG.API_KEY }),
+                ...params
+            });
+            
+            const response = await fetch(`${baseUrl}${endpoint}?${queryParams}`);
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        async function loadInstitutionInfo() {
+            try {
+                const data = await fetchOpenAlexData(`/institutions/${CONFIG.OPENALEX_ID}`);
+                institutionInfo = data;
+                
+                document.getElementById('institutionName').textContent = 
+                    data.display_name || CONFIG.INSTITUTION_NAME_JA;
+                
+                const enName = data.international?.display_name?.en || CONFIG.INSTITUTION_NAME_EN;
+                if (enName && enName !== data.display_name) {
+                    document.getElementById('institutionNameEn').textContent = enName;
+                }
+                
+                document.getElementById('institutionMeta').textContent = 
+                    `データソース: OpenAlex API | OpenAlex ID: ${CONFIG.OPENALEX_ID}${CONFIG.ROR_ID ? ` | ROR ID: ${CONFIG.ROR_ID}` : ''}`;
+                
+                document.getElementById('footerIds').textContent = 
+                    `OpenAlex ID: ${CONFIG.OPENALEX_ID}${CONFIG.ROR_ID ? ` | ROR ID: ${CONFIG.ROR_ID}` : ''}`;
+                
+            } catch (error) {
+                console.error('Institution info error:', error);
+                document.getElementById('institutionName').textContent = CONFIG.INSTITUTION_NAME_JA;
+                document.getElementById('institutionNameEn').textContent = CONFIG.INSTITUTION_NAME_EN;
+                document.getElementById('institutionMeta').textContent = 
+                    `OpenAlex ID: ${CONFIG.OPENALEX_ID}`;
+                document.getElementById('footerIds').textContent = 
+                    `OpenAlex ID: ${CONFIG.OPENALEX_ID}`;
+            }
+        }
+
+        async function loadData() {
+            const loadingEl = document.getElementById('loading');
+            const contentEl = document.getElementById('content');
+            const errorEl = document.getElementById('error-container');
+            
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+            errorEl.innerHTML = '';
+
+            try {
+                if (!institutionInfo) {
+                    await loadInstitutionInfo();
+                }
+
+                const yearStart = document.getElementById('yearStart').value;
+                const yearEnd = document.getElementById('yearEnd').value;
+                const oaStatus = document.getElementById('oaStatus').value;
+                const typeFilter = document.getElementById('typeFilter').value;
+
+                let filterStr = `authorships.institutions.id:${CONFIG.OPENALEX_ID}`;
+                
+                if (yearStart && yearEnd) {
+                    filterStr += `,publication_year:${yearStart}-${yearEnd}`;
+                }
+                if (oaStatus !== 'all') {
+                    filterStr += `,open_access.oa_status:${oaStatus}`;
+                }
+                if (typeFilter !== 'all') {
+                    filterStr += `,type:${typeFilter}`;
+                }
+
+                const worksData = await fetchOpenAlexData('/works', {
+                    filter: filterStr,
+                    'per-page': 200,
+                    select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,referenced_works,cited_by_api_url'
+                });
+
+                let works = worksData.results || [];
+                
+                const totalWorks = worksData.meta?.count || 0;
+                const oaCount = works.filter(w => w.open_access?.is_oa).length;
+                const avgCitations = works.length > 0 
+                    ? (works.reduce((sum, w) => sum + (w.cited_by_count || 0), 0) / works.length).toFixed(1)
+                    : 0;
+
+                const yearlyData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'publication_year' });
+                const yearlyTrend = (yearlyData.group_by || []).map(item => ({ year: parseInt(item.key), count: item.count })).sort((a, b) => a.year - b.year);
+
+                // OA論文の年次推移データを取得
+                const yearlyOaData = await fetchOpenAlexData('/works', { filter: filterStr + ',open_access.is_oa:true', 'group_by': 'publication_year' });
+                const yearlyOaTrend = (yearlyOaData.group_by || []).map(item => ({ year: parseInt(item.key), count: item.count })).sort((a, b) => a.year - b.year);
+
+                const topicData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'topics.id' });
+                const topTopics = (topicData.group_by || []).slice(0, 10).map(item => ({ topic: item.key_display_name || 'Unknown', count: item.count }));
+
+                const oaData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'open_access.oa_status' });
+                const oaBreakdown = (oaData.group_by || []).map(item => ({ status: item.key_display_name || item.key || 'Unknown', count: item.count }));
+
+                const countryMap = {};
+                works.forEach(work => {
+                    const countries = new Set();
+                    (work.authorships || []).forEach(a => (a.institutions || []).forEach(i => i.country_code && countries.add(i.country_code)));
+                    countries.forEach(c => countryMap[c] = (countryMap[c] || 0) + 1);
+                });
+                const countryCollaboration = Object.entries(countryMap).map(([country, count]) => ({ country, count })).sort((a, b) => b.count - a.count).slice(0, 15);
+
+                const institutionMap = {};
+                const ownInstitutionUrl = `https://openalex.org/${CONFIG.OPENALEX_ID}`;
+                works.forEach(work => {
+                    const institutions = new Set();
+                    (work.authorships || []).forEach(a => (a.institutions || []).forEach(i => i.id && i.id !== ownInstitutionUrl && institutions.add(JSON.stringify({ id: i.id, name: i.display_name || 'Unknown' }))));
+                    institutions.forEach(iStr => {
+                        const inst = JSON.parse(iStr);
+                        if (!institutionMap[inst.name]) institutionMap[inst.name] = { name: inst.name, id: inst.id, count: 0 };
+                        institutionMap[inst.name].count++;
+                    });
+                });
+                const topInstitutions = Object.values(institutionMap).sort((a, b) => b.count - a.count).slice(0, 15);
+
+                const authorMap = {};
+                works.forEach(work => {
+                    (work.authorships || []).forEach(a => {
+                        if (a.author?.display_name) {
+                            const name = a.author.display_name;
+                            if (!authorMap[name]) authorMap[name] = { name: name, id: a.author.id, orcid: a.author.orcid, count: 0 };
+                            authorMap[name].count++;
+                        }
+                    });
+                });
+                const topAuthors = Object.values(authorMap).sort((a, b) => b.count - a.count).slice(0, 10);
+
+                const recentWorks = works.sort((a, b) => b.cited_by_count - a.cited_by_count).slice(0, 5);
+
+                allPapersData = works.sort((a, b) => b.publication_year - a.publication_year);
+                currentPage = 1;
+
+                updateStats(totalWorks, oaCount, avgCitations, countryCollaboration.length);
+                updateCharts(yearlyTrend, yearlyOaTrend, oaBreakdown, topTopics, countryCollaboration, topInstitutions);
+                updateAuthorsList(topAuthors);
+                updatePapersList(recentWorks);
+                updateAllPapersList();
+
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                document.getElementById('lastUpdate').textContent = `最終更新: ${new Date().toLocaleString('ja-JP')}`;
+
+            } catch (error) {
+                console.error('Error:', error);
+                loadingEl.style.display = 'none';
+                
+                errorEl.innerHTML = ''; // Clear existing errors
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                const p1 = document.createElement('p');
+                const strong = document.createElement('strong');
+                strong.textContent = 'エラー:';
+                p1.appendChild(strong);
+                p1.append(` ${error.message}`);
+                const p2 = document.createElement('p');
+                p2.style.fontSize = '0.875rem';
+                p2.style.marginTop = '0.5rem';
+                p2.textContent = 'データの取得に失敗しました。OpenAlex IDが正しいか確認してください。';
+                errorDiv.appendChild(p1);
+                errorDiv.appendChild(p2);
+                errorEl.appendChild(errorDiv);
+            }
+        }
+
+        function updateStats(total, oa, avg, countries) {
+            document.getElementById('totalWorks').textContent = total.toLocaleString();
+            document.getElementById('oaCount').textContent = oa.toLocaleString();
+            document.getElementById('oaPercentage').textContent = total > 0 ? `${((oa / total) * 100).toFixed(1)}%` : '0%';
+            document.getElementById('avgCitations').textContent = avg;
+            document.getElementById('countryCount').textContent = countries;
+        }
+
+        function updateCharts(yearly, yearlyOa, oa, topics, countries, institutions) {
+            if (charts.yearly) charts.yearly.destroy();
+            const yearlyCtx = document.getElementById('yearlyChart').getContext('2d');
+
+            // OAデータをマップに変換（年をキーとして検索しやすくする）
+            const yearlyOaMap = {};
+            yearlyOa.forEach(item => {
+                yearlyOaMap[item.year] = item.count;
+            });
+
+            // 各年のOA論文数を取得（データがない場合は0）
+            const oaData = yearly.map(d => yearlyOaMap[d.year] || 0);
+
+            charts.yearly = new Chart(yearlyCtx, {
+                type: 'line',
+                data: {
+                    labels: yearly.map(d => d.year),
+                    datasets: [
+                        {
+                            label: '総論文数',
+                            data: yearly.map(d => d.count),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'OA論文数',
+                            data: oaData,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+
+            if (charts.oa) charts.oa.destroy();
+            const oaCtx = document.getElementById('oaChart').getContext('2d');
+            const oaColorMap = { 'gold': '#fef3c7', 'green': '#d1fae5', 'hybrid': '#dbeafe', 'bronze': '#fed7aa', 'closed': '#e5e7eb' };
+            charts.oa = new Chart(oaCtx, { type: 'doughnut', data: { labels: oa.map(d => d.status), datasets: [{ data: oa.map(d => d.count), backgroundColor: oa.map(d => oaColorMap[d.status.toLowerCase()] || '#6b7280') }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+
+            if (charts.topics) charts.topics.destroy();
+            const topicsCtx = document.getElementById('topicsChart').getContext('2d');
+            charts.topics = new Chart(topicsCtx, { type: 'bar', data: { labels: topics.map(d => d.topic), datasets: [{ label: '論文数', data: topics.map(d => d.count), backgroundColor: '#10b981' }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } } });
+
+            if (charts.country) charts.country.destroy();
+            const countryCtx = document.getElementById('countryChart').getContext('2d');
+            charts.country = new Chart(countryCtx, { type: 'bar', data: { labels: countries.map(d => d.country), datasets: [{ label: '論文数', data: countries.map(d => d.count), backgroundColor: '#8b5cf6' }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } } });
+
+            if (charts.institutions) charts.institutions.destroy();
+            const institutionsCtx = document.getElementById('institutionsChart').getContext('2d');
+            charts.institutions = new Chart(institutionsCtx, { type: 'bar', data: { labels: institutions.map(d => d.name), datasets: [{ label: '論文数', data: institutions.map(d => d.count), backgroundColor: '#f59e0b' }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } } });
+        }
+
+        function updateAuthorsList(authors) {
+            const container = document.getElementById('authorsList');
+            container.innerHTML = ''; // Clear
+
+            authors.forEach((author, idx) => {
+                const authorId = author.id ? author.id.replace('https://openalex.org/', '').toLowerCase() : '';
+                const authorUrl = authorId ? `https://openalex.org/${authorId}` : '';
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'author-item';
+
+                const leftDiv = document.createElement('div');
+                leftDiv.style.display = 'flex';
+                leftDiv.style.alignItems = 'center';
+
+                const rankSpan = document.createElement('span');
+                rankSpan.className = 'author-rank';
+                rankSpan.textContent = idx + 1;
+                leftDiv.appendChild(rankSpan);
+
+                const nameEl = document.createElement(authorUrl ? 'a' : 'span');
+                if (authorUrl) {
+                    nameEl.href = authorUrl;
+                    nameEl.target = '_blank';
+                    nameEl.style.color = '#2563eb';
+                    nameEl.style.textDecoration = 'none';
+                }
+                nameEl.textContent = author.name;
+                leftDiv.appendChild(nameEl);
+
+                if (author.orcid) {
+                    const orcidLink = document.createElement('a');
+                    orcidLink.href = author.orcid;
+                    orcidLink.target = '_blank';
+                    orcidLink.title = 'ORCID';
+                    orcidLink.style.marginLeft = '0.5rem';
+                    
+                    const orcidImg = document.createElement('img');
+                    orcidImg.src = 'https://orcid.org/sites/default/files/images/orcid_16x16.png';
+                    orcidImg.alt = 'ORCID';
+                    orcidImg.style.width = '16px';
+                    orcidImg.style.height = '16px';
+                    orcidImg.style.verticalAlign = 'middle';
+                    
+                    orcidLink.appendChild(orcidImg);
+                    leftDiv.appendChild(orcidLink);
+                }
+                
+                itemDiv.appendChild(leftDiv);
+
+                const countBadge = document.createElement('span');
+                countBadge.className = 'badge blue';
+                countBadge.textContent = `${author.count} 論文`;
+                itemDiv.appendChild(countBadge);
+
+                container.appendChild(itemDiv);
+            });
+        }
+
+        function updatePapersList(papers) {
+            const container = document.getElementById('papersList');
+            container.innerHTML = ''; // Clear
+
+            papers.forEach(paper => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'paper-item';
+
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'paper-title';
+                titleDiv.textContent = paper.title || 'No title';
+                itemDiv.appendChild(titleDiv);
+
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'paper-meta';
+
+                const yearSpan = document.createElement('span');
+                yearSpan.className = 'badge blue';
+                yearSpan.textContent = `📅 ${paper.publication_year}年`;
+                metaDiv.appendChild(yearSpan);
+
+                const citedSpan = document.createElement('span');
+                citedSpan.className = 'badge purple';
+                citedSpan.textContent = `📊 被引用数: ${paper.cited_by_count || 0}`;
+                metaDiv.appendChild(citedSpan);
+
+                if (paper.open_access?.is_oa) {
+                    const oaSpan = document.createElement('span');
+                    oaSpan.className = 'badge green';
+                    oaSpan.textContent = '🔓 OA';
+                    metaDiv.appendChild(oaSpan);
+                }
+
+                if (paper.doi) {
+                    const doiLink = document.createElement('a');
+                    doiLink.href = `https://doi.org/${paper.doi.replace('https://doi.org/', '')}`;
+                    doiLink.target = '_blank';
+                    doiLink.style.color = '#2563eb';
+                    doiLink.textContent = '🔗 DOI';
+                    metaDiv.appendChild(doiLink);
+                }
+                
+                itemDiv.appendChild(metaDiv);
+                container.appendChild(itemDiv);
+            });
+        }
+
+        function getOABadgeClass(oaStatus) {
+            return { 'gold': 'oa-gold', 'green': 'oa-green', 'hybrid': 'oa-hybrid', 'bronze': 'oa-bronze', 'closed': 'oa-closed' }[oaStatus] || 'oa-closed';
+        }
+
+        function getOAStatusLabel(oaStatus) {
+            return { 'gold': 'Gold', 'green': 'Green', 'hybrid': 'Hybrid', 'bronze': 'Bronze', 'closed': 'Closed' }[oaStatus] || 'Unknown';
+        }
+
+        function updateAllPapersList() {
+            const startIdx = (currentPage - 1) * papersPerPage;
+            const endIdx = startIdx + papersPerPage;
+            const pagePapers = allPapersData.slice(startIdx, endIdx);
+            
+            const container = document.getElementById('allPapersList');
+            container.innerHTML = ''; // Clear previous content
+
+            pagePapers.forEach(paper => {
+                const oaStatus = paper.open_access?.oa_status || 'closed';
+                const source = paper.primary_location?.source?.display_name || '不明';
+                const doi = paper.doi ? paper.doi.replace('https://doi.org/', '') : '';
+                const type = paper.type || 'unknown';
+                const workId = paper.id ? paper.id.replace('https://openalex.org/', '').toLowerCase() : '';
+                const workUrl = workId ? `https://openalex.org/works/${workId}` : '';
+                const topics = paper.topics ? paper.topics.slice(0, 3).map(t => t.display_name).join(', ') : '-';
+
+                const tr = document.createElement('tr');
+
+                // Title
+                const tdTitle = document.createElement('td');
+                if (workUrl) {
+                    const a = document.createElement('a');
+                    a.href = workUrl;
+                    a.target = '_blank';
+                    a.style.color = '#2563eb';
+                    a.style.textDecoration = 'none';
+                    a.style.fontWeight = '500';
+                    a.textContent = paper.title || 'タイトルなし';
+                    tdTitle.appendChild(a);
+                } else {
+                    const div = document.createElement('div');
+                    div.style.fontWeight = '500';
+                    div.textContent = paper.title || 'タイトルなし';
+                    tdTitle.appendChild(div);
+                }
+                tr.appendChild(tdTitle);
+
+                // Year
+                const tdYear = document.createElement('td');
+                tdYear.textContent = paper.publication_year || '-';
+                tr.appendChild(tdYear);
+
+                // Type
+                const tdType = document.createElement('td');
+                tdType.textContent = type;
+                tr.appendChild(tdType);
+
+                // OA Status
+                const tdOa = document.createElement('td');
+                const spanOa = document.createElement('span');
+                spanOa.className = `oa-badge ${getOABadgeClass(oaStatus)}`;
+                spanOa.textContent = getOAStatusLabel(oaStatus);
+                tdOa.appendChild(spanOa);
+                tr.appendChild(tdOa);
+
+                // Cited By
+                const tdCitedBy = document.createElement('td');
+                tdCitedBy.style.textAlign = 'center';
+                const aCitedBy = document.createElement('a');
+                aCitedBy.href = `https://openalex.org/works?filter=cited_by:${workId}`;
+                aCitedBy.target = '_blank';
+                aCitedBy.style.color = '#2563eb';
+                aCitedBy.style.textDecoration = 'none';
+                aCitedBy.textContent = paper.cited_by_count || 0;
+                tdCitedBy.appendChild(aCitedBy);
+                tr.appendChild(tdCitedBy);
+
+                // Cites
+                const tdCites = document.createElement('td');
+                tdCites.style.textAlign = 'center';
+                const aCites = document.createElement('a');
+                aCites.href = `https://openalex.org/works?filter=cites:${workId}`;
+                aCites.target = '_blank';
+                aCites.style.color = '#2563eb';
+                aCites.style.textDecoration = 'none';
+                aCites.textContent = paper.referenced_works?.length || 0;
+                tdCites.appendChild(aCites);
+                tr.appendChild(tdCites);
+
+                // Source
+                const tdSource = document.createElement('td');
+                tdSource.style.fontSize = '0.8rem';
+                tdSource.textContent = source;
+                tr.appendChild(tdSource);
+
+                // DOI
+                const tdDoi = document.createElement('td');
+                tdDoi.style.fontSize = '0.75rem';
+                if (doi) {
+                    const aDoi = document.createElement('a');
+                    aDoi.href = `https://doi.org/${doi}`;
+                    aDoi.target = '_blank';
+                    aDoi.style.color = '#2563eb';
+                    aDoi.style.textDecoration = 'none';
+                    aDoi.style.wordBreak = 'break-all';
+                    aDoi.textContent = `https://doi.org/${doi}`;
+                    tdDoi.appendChild(aDoi);
+                } else {
+                    tdDoi.textContent = '-';
+                }
+                tr.appendChild(tdDoi);
+
+                // Topics
+                const tdTopics = document.createElement('td');
+                tdTopics.style.fontSize = '0.8rem';
+                tdTopics.textContent = topics;
+                tr.appendChild(tdTopics);
+
+                // Graph button
+                const tdGraph = document.createElement('td');
+                const btnGraph = document.createElement('button');
+                btnGraph.textContent = 'グラフ表示';
+                btnGraph.style.fontSize = '0.75rem';
+                btnGraph.style.padding = '0.2rem 0.4rem';
+                btnGraph.onclick = () => showCitationNetwork(workId);
+                tdGraph.appendChild(btnGraph);
+                tr.appendChild(tdGraph);
+
+                container.appendChild(tr);
+            });
+            
+            updatePagination();
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(allPapersData.length / papersPerPage);
+            const container = document.getElementById('pagination');
+            container.innerHTML = ''; // Clear
+
+            if (totalPages <= 1) {
+                return;
+            }
+
+            const createButton = (text, page, isDisabled = false, isActive = false) => {
+                const button = document.createElement('button');
+                button.textContent = text;
+                button.onclick = () => changePage(page);
+                if (isDisabled) button.disabled = true;
+                if (isActive) button.classList.add('active');
+                return button;
+            };
+
+            container.appendChild(createButton('最初', 1, currentPage === 1));
+            container.appendChild(createButton('前へ', currentPage - 1, currentPage === 1));
+
+            const maxButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+            for (let i = startPage; i <= endPage; i++) {
+                container.appendChild(createButton(i, i, false, i === currentPage));
+            }
+
+            container.appendChild(createButton('次へ', currentPage + 1, currentPage === totalPages));
+            container.appendChild(createButton('最後', totalPages, currentPage === totalPages));
+            
+            const pageInfo = document.createElement('span');
+            pageInfo.className = 'page-info';
+            pageInfo.textContent = `${currentPage} / ${totalPages} ページ (全 ${allPapersData.length} 件)`;
+            container.appendChild(pageInfo);
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(allPapersData.length / papersPerPage);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            updateAllPapersList();
+            document.getElementById('allPapersList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // --- Citation Network Functions ---
+        const modal = document.getElementById('citationModal');
+        
+        function setupModal() {
+            const closeButton = document.getElementById('modalCloseButton');
+            closeButton.onclick = () => modal.style.display = "none";
+            window.onclick = (event) => {
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+            };
+        }
+
+        async function showCitationNetwork(workId) {
+            if (!workId) return;
+            modal.style.display = "block";
+            
+            const container = document.getElementById('citationNetwork');
+            container.innerHTML = `<div class="spinner"></div><p style="text-align: center;">引用情報を取得中...</p>`;
+            
+            if (citationNetwork) {
+                citationNetwork.destroy();
+                citationNetwork = null;
+            }
+
+            try {
+                // First, try to find the paper in the already loaded data (case-insensitive)
+                let work = allPapersData.find(p => p.id.toLowerCase().includes(workId.toLowerCase()));
+
+                // If not found, fetch it directly from the API. This is more robust.
+                if (!work) {
+                    console.log(`Work ${workId} not in local data, fetching directly.`);
+                    work = await fetchOpenAlexData(`/works/${workId}`, {
+                        select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,referenced_works,cited_by_api_url'
+                    });
+                }
+
+                if (!work) throw new Error('指定された論文が見つかりませんでした。');
+
+                document.getElementById('citationModalTitle').textContent = `引用ネットワーク: ${work.title.substring(0, 50)}...`;
+
+                const nodes = [];
+                const edges = [];
+                const nodeIds = new Set();
+
+                // 1. Add Central Node (XSS対策: HTMLエスケープを使用)
+                const escapedTitle = escapeHtml(work.title.substring(0, 30)) + '...';
+                nodes.push({
+                    id: work.id,
+                    label: escapedTitle,
+                    shape: 'box',
+                    color: '#f59e0b',
+                    font: { size: 14, bold: true }
+                });
+                nodeIds.add(work.id);
+
+                // 2. Add Referenced Works (Outgoing) - XSS対策
+                const referenced = (work.referenced_works || []).slice(0, 15); // Limit for performance
+                if (referenced.length > 0) {
+                    const referencedIds = referenced.map(url => url.replace('https://openalex.org/', ''));
+                    const referencedData = await fetchOpenAlexData('/works', { filter: `openalex_id:${referencedIds.join('|')}`, select: 'id,display_name' });
+                    (referencedData.results || []).forEach(ref => {
+                        if (!nodeIds.has(ref.id)) {
+                            const escapedLabel = escapeHtml(ref.display_name.substring(0, 30)) + '...';
+                            nodes.push({ id: ref.id, label: escapedLabel, color: '#dbeafe' });
+                            nodeIds.add(ref.id);
+                        }
+                        edges.push({ from: work.id, to: ref.id, arrows: 'to', color: { color: '#aab8c2' } });
+                    });
+                }
+
+                // 3. Add Citing Works (Incoming) - XSS対策
+                // The workId passed to the function is already the short form, e.g., w4400349825
+                const citingData = await fetchOpenAlexData('/works', { filter: `cites:${workId}`, 'per-page': 15, select: 'id,display_name' });
+                (citingData.results || []).forEach(citer => {
+                    if (!nodeIds.has(citer.id)) {
+                        const escapedLabel = escapeHtml(citer.display_name.substring(0, 30)) + '...';
+                        nodes.push({ id: citer.id, label: escapedLabel, color: '#d1fae5' });
+                        nodeIds.add(citer.id);
+                    }
+                    edges.push({ from: citer.id, to: work.id, arrows: 'to', color: { color: '#aab8c2' } });
+                });
+
+                const networkContainer = document.getElementById('citationNetwork');
+                networkContainer.innerHTML = ''; // Clear spinner
+
+                const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+                const options = {
+                    layout: { hierarchical: false },
+                    physics: { stabilization: true },
+                    edges: { smooth: { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.4 } },
+                    nodes: { font: { size: 12 } }
+                };
+
+                citationNetwork = new vis.Network(networkContainer, data, options);
+
+            } catch (error) {
+                console.error('Citation network error:', error);
+                const networkContainer = document.getElementById('citationNetwork');
+                networkContainer.innerHTML = '';
+                const p = document.createElement('p');
+                p.style.textAlign = 'center';
+                p.style.color = 'red';
+                p.textContent = `ネットワークの取得に失敗しました: ${error.message}`;
+                networkContainer.appendChild(p);
+            }
+        }
+
+        window.addEventListener('load', () => {
+            loadData();
+            setupModal();
+        });
+    </script>
+</body>
+</html>
