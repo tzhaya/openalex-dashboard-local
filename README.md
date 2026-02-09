@@ -60,7 +60,7 @@ OpenAlex APIを使用して研究機関の論文データを可視化するイ�
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/tzhaya/openalex-dashboard.git
+git clone https://github.com/tzhaya/openalex-dashboard-local.git
 cd openalex-dashboard
 ```
 
@@ -111,8 +111,6 @@ HTMLファイルをダブルクリックするか、ブラウザにドラッグ&
 ```bash
 curl "https://api.openalex.org/institutions?search=機関名"
 ```
-
-詳しくは [Dashboard_Customization_Guide.md](Dashboard_Customization_Guide.md) を参照。
 
 ## 📂 ファイル構成
 
@@ -175,12 +173,6 @@ filterStr += `,topics.id:T10295`;
 YEAR_START: 2020,  // デフォルト開始年
 YEAR_END: 2024     // デフォルト終了年
 ```
-
-## 📖 ドキュメント
-
-- [カスタマイズガイド](Dashboard_Customization_Guide.md) - 詳細な設定方法
-- [日本の機関ID一覧](Japanese_Institutions_OpenAlex_IDs.md) - 主要機関のOpenAlex ID
-
 ## ⚡ パフォーマンス最適化
 
 ### APIキーの活用
