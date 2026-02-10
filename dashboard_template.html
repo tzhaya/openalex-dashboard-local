@@ -1174,8 +1174,8 @@
                 tdOa.appendChild(spanOa);
                 tr.appendChild(tdOa);
 
-                // Cited By (この論文を引用した論文)
-                // filter=cites:${workId} ${workId}で表示されるWorkを引用している論文を示す
+                // Cited By (${workId}からの被引用論文)
+                // filter=cites:${workId} で表示されるWorkを引用している論文を示す
                 const tdCitedBy = document.createElement('td');
                 tdCitedBy.style.textAlign = 'center';
                 const aCitedBy = document.createElement('a');
@@ -1187,8 +1187,8 @@
                 tdCitedBy.appendChild(aCitedBy);
                 tr.appendChild(tdCitedBy);
 
-                // Cites (この論文が引用した論文)
-                // filter=cited_by:${workId} ${workId}で表示されるWorkが引用されている論文を示す
+                // Cites (${workId}で引用した論文)
+                // filter=cited_by:${workId} で表示されるWorkが引用されている論文を示す
                 const tdCites = document.createElement('td');
                 tdCites.style.textAlign = 'center';
                 const aCites = document.createElement('a');

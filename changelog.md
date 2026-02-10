@@ -16,7 +16,7 @@
 - **統計値「共同研究国数」:** 全国数を表示
 
 **影響ファイル:**
-- [dashboard_template.html](dashboard_template.html) (Line 844-853)
+- [dashboard_template.html](dashboard_template.html) (Line 848-851)
 
 #### 機関ランキング（共同研究機関 TOP 15）
 - **変更前:** クライアント側で200件までのデータから重複排除・集計
@@ -25,14 +25,14 @@
   - シンプルなフィルタロジック：JavaScriptで自機関を除外
 
 **影響ファイル:**
-- [dashboard_template.html](dashboard_template.html) (Line 855-869)
+- [dashboard_template.html](dashboard_template.html) (Line 856-869)
 
 #### 著者ランキング（主要共著者 TOP 10）
 - **変更前:** クライアント側で200件までのデータから著者名で集計
 - **変更後:** `group_by: 'authorships.author.id'` でサーバー側で全件集計、著者詳細情報は `/authors` APIで一度に取得
 
 **影響ファイル:**
-- [dashboard_template.html](dashboard_template.html) (Line 871-899)
+- [dashboard_template.html](dashboard_template.html) (Line 873-906)
 
 ### Issue #2: 論文一覧の「被引用数」「引用数」のリンク先が逆
 
@@ -43,7 +43,7 @@ OpenAlexのフィルタパラメータを修正し、被引用数と引用数の
 - **引用数リンク:** `cites:${workId}` （このペーパーが引用している論文を検索）
 
 **影響ファイル:**
-- [dashboard_template.html](dashboard_template.html) (papers table section)
+- [dashboard_template.html](dashboard_template.html) (Line 1182, 1195)
 
 ### Issue #3: 研究トピック集計の全件化
 
@@ -57,7 +57,7 @@ OpenAlexのフィルタパラメータを修正し、被引用数と引用数の
 **例:** 一つの論文が「Rice Cultivation」と「Agricultural Sustainability」のトピックに該当する場合、primary_topic「Rice Cultivation」のみ集計します。
 
 **影響ファイル:**
-- [dashboard_template.html](dashboard_template.html) (Line 840-842)
+- [dashboard_template.html](dashboard_template.html) (Line 841-843)
 
 #### 論文一覧テーブル「研究トピック」列
 - **変更前:** `paper.topics` から最初の3個を表示
@@ -96,18 +96,18 @@ topInstitutions = institutionData.group_by
 このにより、データポイント間が直線で結ばれ、年次推移の変動がより明確に可視化されます。
 
 **影響ファイル:**
-- [dashboard_template.html](dashboard_template.html) (Line 963-976)
+- [dashboard_template.html](dashboard_template.html) (Line 964, 972)
 
 ## ファイル変更一覧
 
 | ファイル | 変更箇所 | 説明 |
 |--------|--------|------|
-| `dashboard_template.html` | Line 818-822 | API select に primary_topic を追加 |
-| `dashboard_template.html` | Line 840-842 | トピック集計を primary_topic.id に変更 |
+| `dashboard_template.html` | Line 822, 1329 | API select に primary_topic を追加 |
+| `dashboard_template.html` | Line 841-843 | トピック集計を primary_topic.id に変更 |
 | `dashboard_template.html` | Line 856-869 | 機関ランキングで自機関を正規化キーで除外 |
 | `dashboard_template.html` | Line 1136 | 論文一覧トピック表示を primary_topic に変更 |
-| `dashboard_template.html` | Line 1349 | searchWorks API select に primary_topic を追加 |
-| `dashboard_template.html` | Line 963-976 | 年次推移グラフを直線化（tension: 0） |
+| `dashboard_template.html` | Line 1182, 1195 | Citation links を修正（被引用/引用） |
+| `dashboard_template.html` | Line 964, 972 | 年次推移グラフを直線化（tension: 0） |
 
 ## 技術詳細
 
