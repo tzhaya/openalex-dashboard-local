@@ -825,7 +825,6 @@
                 let works = worksData.results || [];
                 
                 const totalWorks = worksData.meta?.count || 0;
-                const oaCount = works.filter(w => w.open_access?.is_oa).length;
                 const avgCitations = works.length > 0 
                     ? (works.reduce((sum, w) => sum + (w.cited_by_count || 0), 0) / works.length).toFixed(1)
                     : 0;
@@ -836,6 +835,7 @@
                 // OA論文の年次推移データを取得
                 const yearlyOaData = await fetchOpenAlexData('/works', { filter: filterStr + ',open_access.is_oa:true', 'group_by': 'publication_year' });
                 const yearlyOaTrend = (yearlyOaData.group_by || []).map(item => ({ year: parseInt(item.key), count: item.count })).sort((a, b) => a.year - b.year);
+                const oaCount = yearlyOaData.meta?.count || 0;
 
                 const topicData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'topics.id' });
                 const topTopics = (topicData.group_by || []).slice(0, 10).map(item => ({ topic: item.key_display_name || 'Unknown', count: item.count }));
