@@ -1174,11 +1174,12 @@
                 tdOa.appendChild(spanOa);
                 tr.appendChild(tdOa);
 
-                // Cited By
+                // Cited By (この論文を引用した論文)
+                // filter=cites:${workId} ${workId}で表示されるWorkを引用している論文を示す
                 const tdCitedBy = document.createElement('td');
                 tdCitedBy.style.textAlign = 'center';
                 const aCitedBy = document.createElement('a');
-                aCitedBy.href = `https://openalex.org/works?filter=cited_by:${workId}`;
+                aCitedBy.href = `https://openalex.org/works?filter=cites:${workId}`;
                 aCitedBy.target = '_blank';
                 aCitedBy.style.color = '#2563eb';
                 aCitedBy.style.textDecoration = 'none';
@@ -1186,11 +1187,12 @@
                 tdCitedBy.appendChild(aCitedBy);
                 tr.appendChild(tdCitedBy);
 
-                // Cites
+                // Cites (この論文が引用した論文)
+                // filter=cited_by:${workId} ${workId}で表示されるWorkが引用されている論文を示す
                 const tdCites = document.createElement('td');
                 tdCites.style.textAlign = 'center';
                 const aCites = document.createElement('a');
-                aCites.href = `https://openalex.org/works?filter=cites:${workId}`;
+                aCites.href = `https://openalex.org/works?filter=cited_by:${workId}`;
                 aCites.target = '_blank';
                 aCites.style.color = '#2563eb';
                 aCites.style.textDecoration = 'none';
