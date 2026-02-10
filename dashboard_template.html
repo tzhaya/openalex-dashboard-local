@@ -819,7 +819,7 @@
                 const worksData = await fetchOpenAlexData('/works', {
                     filter: filterStr,
                     'per-page': 200,
-                    select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,referenced_works,cited_by_api_url'
+                    select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,primary_topic,referenced_works,cited_by_api_url'
                 });
 
                 let works = worksData.results || [];
@@ -837,51 +837,68 @@
                 const yearlyOaTrend = (yearlyOaData.group_by || []).map(item => ({ year: parseInt(item.key), count: item.count })).sort((a, b) => a.year - b.year);
                 const oaCount = yearlyOaData.meta?.count || 0;
 
-                const topicData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'topics.id' });
+                // トピックは一次トピック（primary_topic）で集計する
+                const topicData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'primary_topic.id' });
                 const topTopics = (topicData.group_by || []).slice(0, 10).map(item => ({ topic: item.key_display_name || 'Unknown', count: item.count }));
 
                 const oaData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'open_access.oa_status' });
                 const oaBreakdown = (oaData.group_by || []).map(item => ({ status: item.key_display_name || item.key || 'Unknown', count: item.count }));
 
-                const countryMap = {};
-                works.forEach(work => {
-                    const countries = new Set();
-                    (work.authorships || []).forEach(a => (a.institutions || []).forEach(i => i.country_code && countries.add(i.country_code)));
-                    countries.forEach(c => countryMap[c] = (countryMap[c] || 0) + 1);
-                });
-                const countryCollaboration = Object.entries(countryMap).map(([country, count]) => ({ country, count })).sort((a, b) => b.count - a.count).slice(0, 15);
+                // 国別分布を group_by で全件集計
+                const countryData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.country_code' });
+                const totalCountries = countryData.group_by?.length || 0; // 全国数を保存
+                const countryCollaboration = (countryData.group_by || []).map(item => ({
+                    country: item.key_display_name || item.key || 'Unknown',
+                    count: item.count
+                })).sort((a, b) => b.count - a.count).slice(0, 10);
 
-                const institutionMap = {};
-                const ownInstitutionUrl = `https://openalex.org/${CONFIG.OPENALEX_ID}`;
-                works.forEach(work => {
-                    const institutions = new Set();
-                    (work.authorships || []).forEach(a => (a.institutions || []).forEach(i => i.id && i.id !== ownInstitutionUrl && institutions.add(JSON.stringify({ id: i.id, name: i.display_name || 'Unknown' }))));
-                    institutions.forEach(iStr => {
-                        const inst = JSON.parse(iStr);
-                        if (!institutionMap[inst.name]) institutionMap[inst.name] = { name: inst.name, id: inst.id, count: 0 };
-                        institutionMap[inst.name].count++;
-                    });
-                });
-                const topInstitutions = Object.values(institutionMap).sort((a, b) => b.count - a.count).slice(0, 15);
+                // 機関ランキングを group_by で全件集計
+                const institutionData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.id', 'per-page': 200 });
+                let topInstitutions = [];
+                if (institutionData.group_by && institutionData.group_by.length > 0) {
+                    // 自機関を確実に除外するため、キーを正規化して比較する
+                    const normalizeKey = k => (k || '').toString().replace(/^https?:\/\/openalex\.org\//i, '').toLowerCase();
+                    const ownIdNorm = normalizeKey(CONFIG.OPENALEX_ID);
+                    topInstitutions = institutionData.group_by
+                        .filter(item => normalizeKey(item.key) !== ownIdNorm)
+                        .slice(0, 15)
+                        .map(item => ({
+                            id: item.key,
+                            name: item.key_display_name || 'Unknown',
+                            count: item.count
+                        }));
+                }
 
-                const authorMap = {};
-                works.forEach(work => {
-                    (work.authorships || []).forEach(a => {
-                        if (a.author?.display_name) {
-                            const name = a.author.display_name;
-                            if (!authorMap[name]) authorMap[name] = { name: name, id: a.author.id, orcid: a.author.orcid, count: 0 };
-                            authorMap[name].count++;
-                        }
+                // 著者ランキングを group_by で全件集計
+                const authorData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.author.id', 'per-page': 200 });
+                let topAuthors = [];
+                if (authorData.group_by && authorData.group_by.length > 0) {
+                    const authorIds = authorData.group_by.slice(0, 10).map(item => item.key);
+                    const authorInfoData = await fetchOpenAlexData('/authors', {
+                        filter: `openalex_id:${authorIds.join('|')}`,
+                        select: 'id,display_name,orcid'
                     });
-                });
-                const topAuthors = Object.values(authorMap).sort((a, b) => b.count - a.count).slice(0, 10);
+                    const authorInfoMap = {};
+                    (authorInfoData.results || []).forEach(author => {
+                        authorInfoMap[author.id] = { display_name: author.display_name, orcid: author.orcid };
+                    });
+                    topAuthors = authorData.group_by.slice(0, 10).map(item => {
+                        const info = authorInfoMap[item.key];
+                        return {
+                            id: item.key,
+                            name: info?.display_name || 'Unknown',
+                            orcid: info?.orcid || null,
+                            count: item.count
+                        };
+                    });
+                }
 
                 const recentWorks = works.sort((a, b) => b.cited_by_count - a.cited_by_count).slice(0, 5);
 
                 allPapersData = works.sort((a, b) => b.publication_year - a.publication_year);
                 currentPage = 1;
 
-                updateStats(totalWorks, oaCount, avgCitations, countryCollaboration.length);
+                updateStats(totalWorks, oaCount, avgCitations, totalCountries);
                 updateCharts(yearlyTrend, yearlyOaTrend, oaBreakdown, topTopics, countryCollaboration, topInstitutions);
                 updateAuthorsList(topAuthors);
                 updatePapersList(recentWorks);
@@ -944,7 +961,7 @@
                             data: yearly.map(d => d.count),
                             borderColor: '#3b82f6',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            tension: 0.4,
+                            tension: 0,
                             fill: true
                         },
                         {
@@ -952,7 +969,7 @@
                             data: oaData,
                             borderColor: '#10b981',
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            tension: 0.4,
+                            tension: 0,
                             fill: true
                         }
                     ]
@@ -1116,7 +1133,7 @@
                 const type = paper.type || 'unknown';
                 const workId = paper.id ? paper.id.replace('https://openalex.org/', '').toLowerCase() : '';
                 const workUrl = workId ? `https://openalex.org/works/${workId}` : '';
-                const topics = paper.topics ? paper.topics.slice(0, 3).map(t => t.display_name).join(', ') : '-';
+                const topics = paper.primary_topic?.display_name || '-';
 
                 const tr = document.createElement('tr');
 
@@ -1307,7 +1324,7 @@
                 if (!work) {
                     console.log(`Work ${workId} not in local data, fetching directly.`);
                     work = await fetchOpenAlexData(`/works/${workId}`, {
-                        select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,referenced_works,cited_by_api_url'
+                        select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,primary_topic,referenced_works,cited_by_api_url'
                     });
                 }
 
