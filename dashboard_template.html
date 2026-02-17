@@ -844,8 +844,8 @@
                 const oaData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'open_access.oa_status' });
                 const oaBreakdown = (oaData.group_by || []).map(item => ({ status: item.key_display_name || item.key || 'Unknown', count: item.count }));
 
-                // 国別分布を group_by で全件集計
-                const countryData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.country_code' });
+                // 国別分布を group_by で全件集計（per-page:200 で最大200カ国取得）
+                const countryData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.country_code', 'per-page': 200 });
                 const totalCountries = countryData.group_by?.length || 0; // 全国数を保存
                 const countryCollaboration = (countryData.group_by || []).map(item => ({
                     country: item.key_display_name || item.key || 'Unknown',

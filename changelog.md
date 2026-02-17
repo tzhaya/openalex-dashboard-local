@@ -154,10 +154,38 @@ const countryCollaboration = countryData.group_by.map(item => ({
 - [ ] 集計期間のUIコンポーネント改善（カレンダーピッカー等）
 - [ ] パフォーマンス最適化（キャッシング等）
 
+### Issue #6: 共同研究国数の過小計上（2026-02-16）
+
+**原因:**
+国別分布の `group_by` クエリに `per-page` が未指定だったため、APIのデフォルト値（25）が適用されていた。共同研究国が26カ国以上ある場合、超えた分が取得されず、「共同研究国数」が実際より少なく表示されていた。
+
+なお、機関ランキングの同様のクエリには `'per-page': 200` が既に指定されていたが、国別集計には漏れていた。
+
+**変更前:**
+```javascript
+const countryData = await fetchOpenAlexData('/works', {
+    filter: filterStr,
+    'group_by': 'authorships.institutions.country_code'
+});
+```
+
+**変更後:**
+```javascript
+const countryData = await fetchOpenAlexData('/works', {
+    filter: filterStr,
+    'group_by': 'authorships.institutions.country_code',
+    'per-page': 200
+});
+```
+
+**影響ファイル:**
+- [dashboard_template.html](dashboard_template.html) (Line 848)
+
 ## 変更履歴
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-16 | **Issue #6 修正完了** - 共同研究国数の過小計上修正（`per-page:200` 追加） |
 | 2026-02-10 | **Issue #1, #2 修正完了** - group_by集計実装、citation links修正 |
 | 2026-02-10 | **Issue #3 修正完了** - primary_topic集計に統一（グラフ・論文一覧） |
 | 2026-02-10 | **Issue #4 修正完了** - 機関ランキングで自機関を正規化キーで確実除外 |
