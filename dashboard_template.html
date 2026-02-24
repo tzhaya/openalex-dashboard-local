@@ -581,7 +581,7 @@
                     <div class="icon">🔓</div>
                 </div>
                 <div class="stat-card purple">
-                    <div class="label">平均被引用数</div>
+                    <div class="label" id="avgCitationsLabel">平均被引用数</div>
                     <div class="value" id="avgCitations">0</div>
                     <div class="icon">📊</div>
                 </div>
@@ -816,44 +816,57 @@
                     filterStr += `,type:${typeFilter}`;
                 }
 
-                const worksData = await fetchOpenAlexData('/works', {
-                    filter: filterStr,
-                    'per-page': 200,
-                    select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,primary_topic,referenced_works,cited_by_api_url'
-                });
+                const [
+                    worksData,
+                    yearlyData,
+                    yearlyOaData,
+                    topicData,
+                    oaData,
+                    countryData,
+                    institutionData,
+                    authorData
+                ] = await Promise.all([
+                    fetchOpenAlexData('/works', {
+                        filter: filterStr,
+                        'per-page': 200,
+                        select: 'id,title,publication_year,cited_by_count,open_access,doi,authorships,type,primary_location,topics,primary_topic,referenced_works,cited_by_api_url'
+                    }),
+                    fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'publication_year' }),
+                    // OA論文の年次推移データを取得
+                    fetchOpenAlexData('/works', { filter: filterStr + ',open_access.is_oa:true', 'group_by': 'publication_year' }),
+                    // トピックは一次トピック（primary_topic）で集計する
+                    fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'primary_topic.id' }),
+                    fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'open_access.oa_status' }),
+                    // 国別分布を group_by で全件集計（per-page:200 で最大200カ国取得）
+                    fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.country_code', 'per-page': 200 }),
+                    // 機関ランキングを group_by で全件集計
+                    fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.id', 'per-page': 200 }),
+                    // 著者ランキングを group_by で全件集計
+                    fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.author.id', 'per-page': 200 })
+                ]);
 
                 let works = worksData.results || [];
-                
                 const totalWorks = worksData.meta?.count || 0;
-                const avgCitations = works.length > 0 
-                    ? (works.reduce((sum, w) => sum + (w.cited_by_count || 0), 0) / works.length).toFixed(1)
-                    : 0;
+                // 平均被引用数は institutionInfo（全期間・全論文対象）から算出
+                const avgCitations = (institutionInfo?.works_count > 0)
+                    ? (institutionInfo.cited_by_count / institutionInfo.works_count).toFixed(1)
+                    : '0';
 
-                const yearlyData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'publication_year' });
                 const yearlyTrend = (yearlyData.group_by || []).map(item => ({ year: parseInt(item.key), count: item.count })).sort((a, b) => a.year - b.year);
 
-                // OA論文の年次推移データを取得
-                const yearlyOaData = await fetchOpenAlexData('/works', { filter: filterStr + ',open_access.is_oa:true', 'group_by': 'publication_year' });
                 const yearlyOaTrend = (yearlyOaData.group_by || []).map(item => ({ year: parseInt(item.key), count: item.count })).sort((a, b) => a.year - b.year);
                 const oaCount = yearlyOaData.meta?.count || 0;
 
-                // トピックは一次トピック（primary_topic）で集計する
-                const topicData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'primary_topic.id' });
                 const topTopics = (topicData.group_by || []).slice(0, 10).map(item => ({ topic: item.key_display_name || 'Unknown', count: item.count }));
 
-                const oaData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'open_access.oa_status' });
                 const oaBreakdown = (oaData.group_by || []).map(item => ({ status: item.key_display_name || item.key || 'Unknown', count: item.count }));
 
-                // 国別分布を group_by で全件集計（per-page:200 で最大200カ国取得）
-                const countryData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.country_code', 'per-page': 200 });
-                const totalCountries = countryData.group_by?.length || 0; // 全国数を保存
+                const totalCountries = countryData.group_by?.length || 0;
                 const countryCollaboration = (countryData.group_by || []).map(item => ({
                     country: item.key_display_name || item.key || 'Unknown',
                     count: item.count
                 })).sort((a, b) => b.count - a.count).slice(0, 10);
 
-                // 機関ランキングを group_by で全件集計
-                const institutionData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.institutions.id', 'per-page': 200 });
                 let topInstitutions = [];
                 if (institutionData.group_by && institutionData.group_by.length > 0) {
                     // 自機関を確実に除外するため、キーを正規化して比較する
@@ -869,8 +882,6 @@
                         }));
                 }
 
-                // 著者ランキングを group_by で全件集計
-                const authorData = await fetchOpenAlexData('/works', { filter: filterStr, 'group_by': 'authorships.author.id', 'per-page': 200 });
                 let topAuthors = [];
                 if (authorData.group_by && authorData.group_by.length > 0) {
                     const authorIds = authorData.group_by.slice(0, 10).map(item => item.key);
@@ -1402,6 +1413,8 @@
         }
 
         window.addEventListener('load', () => {
+            document.getElementById('avgCitationsLabel').textContent =
+                `平均被引用数（${CONFIG.YEAR_START}-${CONFIG.YEAR_END}）`;
             loadData();
             setupModal();
         });

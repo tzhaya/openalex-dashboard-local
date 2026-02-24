@@ -1,6 +1,6 @@
 # Changelog
 
-**最終更新日:** 2026年2月10日
+**最終更新日:** 2026年2月24日
 
 ## 修正内容
 
@@ -152,6 +152,7 @@ const countryCollaboration = countryData.group_by.map(item => ({
 
 - [ ] 世界地図ヒートマップ表示（技術的課題：CDNライブラリの互換性）
 - [ ] 集計期間のUIコンポーネント改善（カレンダーピッカー等）
+- [x] パフォーマンス最適化（APIコール並列化）
 - [ ] パフォーマンス最適化（キャッシング等）
 
 ### Issue #6: 共同研究国数の過小計上（2026-02-16）
@@ -181,10 +182,118 @@ const countryData = await fetchOpenAlexData('/works', {
 **影響ファイル:**
 - [dashboard_template.html](dashboard_template.html) (Line 848)
 
+### Issue #7: 平均被引用数が200件サンプルからの計算になっている（2026-02-24）
+
+**原因:**
+`per-page: 200` で取得した最大200件の論文から平均被引用数を算出していたため、総論文数が200件を超える機関では不正確な値が表示されていた。また、APIのデフォルト順（関連度順）の先頭200件を対象としており、代表性も低かった。
+
+**対応内容:**
+`group_by=cited_by_count` とカーソルページネーションを使った専用関数 `fetchCitationStats()` を新設し、全論文の被引用総数を正確に算出するよう変更した。
+
+- 被引用総数 = `Σ(cited_by_count値 × その値を持つ論文数)`
+- 平均被引用数 = 被引用総数 ÷ `meta.count`（総論文数、従来より正確）
+
+**変更前:**
+```javascript
+// 200件のみから算出（不正確）
+const avgCitations = works.length > 0
+    ? (works.reduce((sum, w) => sum + (w.cited_by_count || 0), 0) / works.length).toFixed(1)
+    : 0;
+```
+
+**変更後:**
+```javascript
+// fetchCitationStats() で全件集計（正確）
+async function fetchCitationStats(filterStr) {
+    let totalCited = 0;
+    let cursor = '*';
+    while (cursor) {
+        const data = await fetchOpenAlexData('/works', {
+            filter: filterStr, 'group_by': 'cited_by_count', 'per-page': 200, cursor
+        });
+        for (const g of (data.group_by || [])) {
+            const c = parseInt(g.key, 10);
+            if (!isNaN(c)) totalCited += c * g.count;
+        }
+        cursor = data.meta?.next_cursor || null;
+    }
+    return totalCited;
+}
+// ...
+const avgCitations = totalWorks > 0 ? (totalCited / totalWorks).toFixed(1) : '0';
+```
+
+**影響ファイル:**
+- [dashboard_template.html](dashboard_template.html) (Line 788-806: 新関数追加, Line 873: avgCitations算出変更)
+
+---
+
+### Issue #8: APIコールが逐次実行でロードが遅い（2026-02-24）
+
+**原因:**
+`loadData()` 内の8つのAPIコール（年次推移・OA推移・トピック・OA状況・国別・機関別・著者別・被引用統計）が `await` で順番に実行されており、合計待機時間が各リクエスト時間の合計になっていた。
+
+**対応内容:**
+独立した8つのAPIコールを `Promise.all` で並列実行するよう変更した。著者詳細情報の取得（`/authors` エンドポイント）は著者IDの取得結果に依存するため、`Promise.all` の後に続けて実行する従来の構造を維持した。
+
+**変更前:**
+```javascript
+const worksData = await fetchOpenAlexData('/works', { ... });
+const yearlyData = await fetchOpenAlexData('/works', { ... });
+const yearlyOaData = await fetchOpenAlexData('/works', { ... });
+// ... 以下続く（合計8回の逐次 await）
+```
+
+**変更後:**
+```javascript
+const [worksData, yearlyData, yearlyOaData, topicData, oaData,
+       countryData, institutionData, authorData, totalCited]
+    = await Promise.all([
+    fetchOpenAlexData('/works', { ... }),
+    fetchOpenAlexData('/works', { ... }),
+    // ... 8件並列
+    fetchCitationStats(filterStr)   // Issue #7 の修正も統合
+]);
+```
+
+**影響ファイル:**
+- [dashboard_template.html](dashboard_template.html) (Line 839-869: Promise.all に統合)
+
+---
+
+### Issue #9: 平均被引用数カードのデータソースとラベル変更（2026-02-24）
+
+**対応内容:**
+`fetchCitationStats` によるカーソルページネーション（大規模機関で数秒かかる）を廃止し、`loadInstitutionInfo()` で初回取得済みの `institutionInfo` を流用するよう変更。追加APIコスト0。
+
+- **平均被引用数** = `institutionInfo.cited_by_count / institutionInfo.works_count`（全期間・全論文対象）
+- フィルター条件（年・OA・種別）は反映されないため、UIラベルを「平均被引用数（全期間）」に変更
+
+**変更前:**
+```javascript
+// Promise.all 内で fetchCitationStats(filterStr) を呼び出し（カーソルループで複数APIコール）
+const avgCitations = totalWorks > 0 ? (totalCited / totalWorks).toFixed(1) : '0';
+```
+
+**変更後:**
+```javascript
+// 追加APIコストなし、初回ロード済みデータを流用
+const avgCitations = (institutionInfo?.works_count > 0)
+    ? (institutionInfo.cited_by_count / institutionInfo.works_count).toFixed(1)
+    : '0';
+```
+
+**影響ファイル:**
+- [dashboard_template.html](dashboard_template.html) (Line 584: ラベル変更, Line 820-853: Promise.all から fetchCitationStats 削除・avgCitations 算出変更)
+
+---
+
 ## 変更履歴
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-24 | **Issue #9 修正完了** - 平均被引用数を institutionInfo から取得・ラベルに「全期間」付加 |
+| 2026-02-24 | **Issue #7, #8 修正完了** - 平均被引用数の全件集計対応・APIコール並列化 |
 | 2026-02-16 | **Issue #6 修正完了** - 共同研究国数の過小計上修正（`per-page:200` 追加） |
 | 2026-02-10 | **Issue #1, #2 修正完了** - group_by集計実装、citation links修正 |
 | 2026-02-10 | **Issue #3 修正完了** - primary_topic集計に統一（グラフ・論文一覧） |
